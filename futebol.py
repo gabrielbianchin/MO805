@@ -91,5 +91,14 @@ for i in range(len(final_points2)):
 	plt.plot(saida1, saida2, marker = 'o', c='r')
 plt.show()
 
-print(g)
+g.simplify()
 
+#graus do grafo
+graus = g.degree()
+
+#excentricidade
+ecc = g.eccentricity()
+
+#centralidade
+cent = g.evcent()
+print(cent)

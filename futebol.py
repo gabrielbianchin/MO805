@@ -4,10 +4,10 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 
-def constroi_grafo_delaunay(team1: tuple, team2: tuple):
+def constroi_grafo_delaunay(team1: tuple, team2: tuple, distance):
 
 	g = Graph()
-	g.add_vertices(12)
+	g.add_vertices(11)
 
 	vertex_graphs = team2[1].simplices
 	coord = [team2[1].points[x] for x in team2[1].simplices]
@@ -35,11 +35,11 @@ def constroi_grafo_delaunay(team1: tuple, team2: tuple):
 			d0 = abs((np.cross(p1-p0, p1-points)/np.linalg.norm(p1-p0)))
 			d1 = abs((np.cross(p2-p1, p2-points)/np.linalg.norm(p2-p1)))
 			d2 = abs((np.cross(p0-p2, p0-points)/np.linalg.norm(p0-p2)))
-			if d0 < 1.5:
+			if d0 < distance:
 				total_d0.append(d0)
-			if d1 < 1.5:
+			if d1 < distance:
 				total_d1.append(d1)
-			if d2 < 1.5:
+			if d2 < distance:
 				total_d2.append(d2)
 
 		if not total_d0:
@@ -55,7 +55,7 @@ def constroi_grafo_delaunay(team1: tuple, team2: tuple):
 			final_points2.append(p0)
 			g.add_edge(v0, v2)
 
-	return (final_points1, final_points2)
+	return (final_points1, final_points2), g
 
 def filtrar_dados(data_array, frame: int):
 	""" Filtra dados do arquivo .2d para vetores numpy
@@ -146,7 +146,7 @@ if __name__ == "__main__":
 	data_graph2 = (teams[1], Delaunay(teams[1]))
 
 	# constroi o grafo por triangulação de Delaunay e retorna os "final_points" de cada time
-	final_points = constroi_grafo_delaunay(data_graph1, data_graph2)
+	final_points, g = constroi_grafo_delaunay(data_graph1, data_graph2, 1.5)
 
 	# plota todos os jogares em dois grafos de cada time
 	plot_all_players_delaunay(data_graph1, data_graph2)

@@ -3,17 +3,111 @@ from igraph import *
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
+import pandas as pd
+
+def get_actions(actions_array, position_array):
+	#rotulos de acoes
+	actions_labels = ['Domínio','Passe','Drible','Finalização-chute','Finalização-cabeca','Desarme (inf)','Desarme (sup)','Defesa Goleiro','Saida do Goleiro','Tiro-de-meta','Lateral','Escanteio','Impedimento','Falta','Gol', 'Condução']
+
+	dummies = pd.get_dummies(actions_array['actions'])
+	dummies = dummies.T.reindex(np.arange(0,16)).T.fillna(0)
+	dummies.columns = actions_labels
+
+	actions_array = pd.concat([actions_array, pd.DataFrame(['team1' if i <= 14 else 'team2' for i in actions_array['player']], columns=['team'])], axis=1)
+
+	sorted_x = np.sort(np.unique(position_array[:,np.arange(1,len(position_array[0]),2)]))
+	sorted_y = np.sort(np.unique(position_array[:,np.arange(2,len(position_array[0]),2)]))
+
+	min_x = sorted_x[1]
+	min_y = sorted_y[1]
+	max_x = sorted_x[-1]
+	max_y = sorted_y[-1]
+
+	center_x = (min_x + max_x)/2
+
+	third_min, third_max = np.take(np.linspace(min_x, max_x,4), [1,2])
 
 def constroi_grafo_delaunay(team1: tuple, team2: tuple, distance):
 
-	g = Graph()
-	g.add_vertices(11)
+	"""
+		Gera o grafo do time1 (azul) e do time2 (vermelho), alem de retirar arestas que passam perto de um
+		jogador do time adversario menores que a distancia fornecida.
+
+		Parameters
+		----------
+			team1
+				triangulacao de delaunay do time1
+			team2
+				triangulacao de delaunay do time2
+			distance
+				distancia utilizada para verificar o quao longe uma aresta esta do time adversario
+		Return
+		------
+			tuple
+				tupla de coordenadas do time1 e time2 que sao maiores que a distancia 
+			g1
+				grafo do time1
+			g2 
+				grafo do time 2
+	"""
+
+	g1 = Graph()
+	g1.add_vertices(11)
+
+	g2 = Graph()
+	g2.add_vertices(11)
+
+	vertex_graphs = team1[1].simplices
+	coord = [team1[1].points[x] for x in team1[1].simplices]
+
+	final_points_t1_1 = []
+	final_points_t1_2 = []
+
+	for i in range(len(coord)):
+		coords = coord[i]
+		vertex = vertex_graphs[i]
+
+		v0 = vertex[0]
+		v1 = vertex[1]
+		v2 = vertex[2]
+
+		p0 = np.array(coords[0])
+		p1 = np.array(coords[1])
+		p2 = np.array(coords[2])
+
+		total_d0 = []
+		total_d1 = []
+		total_d2 = []
+
+		for points in team2[0]:
+			d0 = abs((np.cross(p1-p0, p1-points)/np.linalg.norm(p1-p0)))
+			d1 = abs((np.cross(p2-p1, p2-points)/np.linalg.norm(p2-p1)))
+			d2 = abs((np.cross(p0-p2, p0-points)/np.linalg.norm(p0-p2)))
+			if d0 < distance:
+				total_d0.append(d0)
+			if d1 < distance:
+				total_d1.append(d1)
+			if d2 < distance:
+				total_d2.append(d2)
+
+		if not total_d0:
+			final_points_t1_1.append(p0)
+			final_points_t1_2.append(p1)
+			g1.add_edge(v0, v1)
+		if not total_d1:
+			final_points_t1_1.append(p1)
+			final_points_t1_2.append(p2)
+			g1.add_edge(v1, v2)
+		if not total_d2:
+			final_points_t1_1.append(p2)
+			final_points_t1_2.append(p0)
+			g1.add_edge(v0, v2)
 
 	vertex_graphs = team2[1].simplices
 	coord = [team2[1].points[x] for x in team2[1].simplices]
 
-	final_points1 = []
-	final_points2 = []
+	final_points_t2_1 = []
+	final_points_t2_2 = []
 
 	for i in range(len(coord)):
 		coords = coord[i]
@@ -43,19 +137,19 @@ def constroi_grafo_delaunay(team1: tuple, team2: tuple, distance):
 				total_d2.append(d2)
 
 		if not total_d0:
-			final_points1.append(p0)
-			final_points2.append(p1)
-			g.add_edge(v0, v1)
+			final_points_t2_1.append(p0)
+			final_points_t2_2.append(p1)
+			g2.add_edge(v0, v1)
 		if not total_d1:
-			final_points1.append(p1)
-			final_points2.append(p2)
-			g.add_edge(v1, v2)
+			final_points_t2_1.append(p1)
+			final_points_t2_2.append(p2)
+			g2.add_edge(v1, v2)
 		if not total_d2:
-			final_points1.append(p2)
-			final_points2.append(p0)
-			g.add_edge(v0, v2)
+			final_points_t2_1.append(p2)
+			final_points_t2_2.append(p0)
+			g2.add_edge(v0, v2)
 
-	return (final_points1, final_points2), g
+	return (final_points_t1_1, final_points_t1_2, final_points_t2_1, final_points_t2_2), g1, g2
 
 def filtrar_dados(data_array, frame: int):
 	""" Filtra dados do arquivo .2d para vetores numpy
@@ -105,7 +199,7 @@ def plot_all_players_delaunay(team1: tuple, team2: tuple):
 	plt.triplot(team2[0][:, 0], team2[0][:, 1], team2[1].simplices.copy(), c= 'r')
 	# seta os limites de x e y
 	plt.xlim(0,120)
-	plt.ylim(0,60)
+	plt.ylim(0,80)
 	# especifica grafico de dispersão
 	plt.scatter(team1[0][:, 0], team1[0][:, 1], c='b')
 	plt.scatter(team2[0][:, 0], team2[0][:, 1], c='r')
@@ -117,36 +211,68 @@ def plot_final_points(final_points: tuple):
 		x2, y2 = final_points[1][i]
 		saida1 = [x1, x2]
 		saida2 = [y1, y2]
+		plt.plot(saida1, saida2, marker = 'o', c='b')
+
+	for i in range(len(final_points[2])):
+		x1, y1 = final_points[2][i]
+		x2, y2 = final_points[3][i]
+		saida1 = [x1, x2]
+		saida2 = [y1, y2]
 		plt.plot(saida1, saida2, marker = 'o', c='r')
+	plt.xlim(0,120)
+	plt.ylim(0,80)
 	plt.show()
 
-def gera_dados(grafo):
-	grafo.simplify()
+def gera_dados(g1, g2):
 
-	#graus do grafo
-	graus = grafo.degree()
+	"""
+		Recebe os dois grafos dos dois times e retorna as caracteristicas dos grafos
+	"""
 
-	#excentricidade
-	ecc = grafo.eccentricity()
+	g1.simplify()
 
-	#centralidade
-	cent = grafo.evcent()
+	#graus do g1
+	graus_t1 = g1.degree()
 
-	return (graus, ecc, cent)
+	#excentricidade de g1
+	ecc_t1 = g1.eccentricity()
+
+	#centralidade de g1
+	cent_t1 = g1.evcent()
+
+	g2.simplify()
+
+	#graus do g1
+	graus_t2 = g2.degree()
+
+	#excentricidade de g1
+	ecc_t2 = g2.eccentricity()
+
+	#centralidade de g1
+	cent_t2 = g2.evcent()
+
+	return (graus_t1, ecc_t1, cent_t1), (graus_t2, ecc_t2, cent_t2)
 
 if __name__ == "__main__":
 	# carrega dados do arquivo
-	data_array = np.loadtxt('data/CapSpoT2Suav.2d').astype('int')
+	data_array = np.loadtxt('data/REDMACT1suav.2d').astype('int')
+
+	#carrega acoes
+	labels = ['frame', 'player', 'x', 'y', 'actions', 'status']
+	actions_array = pd.DataFrame(np.loadtxt('data/REDMACT1.ant').astype('int'), columns=labels)
+
+	#pega as acoes do jogo
+	actions = get_actions(actions_array, data_array)
 
 	# gera vetores numpy para o frame especificado
-	teams = filtrar_dados(data_array, 3000)
+	teams = filtrar_dados(data_array, 1281)
 
 	# cria tuplas de vetores numpy do dado frame e seu grafo delaunay
 	data_graph1 = (teams[0], Delaunay(teams[0]))
 	data_graph2 = (teams[1], Delaunay(teams[1]))
 
 	# constroi o grafo por triangulação de Delaunay e retorna os "final_points" de cada time
-	final_points, g = constroi_grafo_delaunay(data_graph1, data_graph2, 1.5)
+	final_points, g1, g2 = constroi_grafo_delaunay(data_graph1, data_graph2, 0.5)
 
 	# plota todos os jogares em dois grafos de cada time
 	plot_all_players_delaunay(data_graph1, data_graph2)
@@ -155,4 +281,7 @@ if __name__ == "__main__":
 	plot_final_points(final_points)
 
 	# gera os dados do grafo
-	dados = gera_dados(g)
+	dados_team1, dados_team2 = gera_dados(g1, g2)
+
+	print(dados_team1)
+	print(dados_team2)

@@ -27,6 +27,8 @@ def get_actions(actions_array, position_array):
 
 	third_min, third_max = np.take(np.linspace(min_x, max_x,4), [1,2])
 
+	return (center_x, third_min, actions_array)
+
 def constroi_grafo_delaunay(team1: tuple, team2: tuple, distance):
 
 	"""
@@ -151,7 +153,7 @@ def constroi_grafo_delaunay(team1: tuple, team2: tuple, distance):
 
 	return (final_points_t1_1, final_points_t1_2, final_points_t2_1, final_points_t2_2), g1, g2
 
-def filtrar_dados(data_array, frame: int):
+def filtrar_dados(data_array):
 	""" Filtra dados do arquivo .2d para vetores numpy
 		Obtem posicao de 24 jogadores em um dado frame
 	
@@ -159,12 +161,10 @@ def filtrar_dados(data_array, frame: int):
 	----------
 		data_array:
 			todos os dados carregados do arquivo
-		frame: int
-			o frame em questao para obtecao dos dadodos
 	Return
 	------
 		tuple
-			tupla de coordenadas do time1, time2 e a quantidade todal de frames da partida
+			tupla de coordenadas do time1 e time2
 	"""
 	array_shape = data_array.shape
 
@@ -178,10 +178,60 @@ def filtrar_dados(data_array, frame: int):
 		players_pos_team1[:,i] = data_array[:, (2*i)+1:(2*i)+3]
 		players_pos_team2[:,i] = data_array[:, (2*num_players-1)+(2*i):(2*num_players-1)+(2*i)+2]
 
+	return (players_pos_team1, players_pos_team2)
+
+def data_manipulation(teams: tuple, actions: tuple):
+	"""
+
+		Retorna frames que ocorreram alguma acao
+
+	"""
+
+	players_pos_team1 = teams[0]
+	players_pos_team2 = teams[1]
+
+	center_x = actions[0]
+	third_min = actions[1]
+	actions_array = actions[2]
+
+	if np.mean(np.sort(np.unique(players_pos_team1[0,:,0]))[1:]) > np.mean(np.sort(np.unique(players_pos_team2[0,:,0]))[1:]):
+	    start_side_team1 = 'right'
+	    start_side_team2 = 'left'
+	else:
+	    start_side_team1 = 'left'
+	    start_side_team2 = 'right'
+
+	activity = []
+	region = []
+	for team, x in zip(actions_array['team'], actions_array['x']):
+	    if team == 'team1':
+	        start_side = start_side_team1
+	    else:
+	        start_side = start_side_team2
+	        
+	    if start_side == 'right' and x < actions[0]:
+	#         activity.append('attack')
+	        if x < actions[1]:
+	            region.append('danger')
+	        else:
+	            region.append('neutral')
+	    else:
+	#         activity.append('defense')
+	        region.append('defense field')
+
+	actions_array = pd.concat([actions_array, pd.DataFrame(region, columns=['region'])], axis=1)
+
+	return actions_array
+
+def get_frame_position(teams: tuple, frame: int):
+
+	players_pos_team1 = teams[0]
+	players_pos_team2 = teams[1]
+
 	in_game_team1 = players_pos_team1[frame][np.all(players_pos_team1[frame] >= 0, axis=1)]
 	in_game_team2 = players_pos_team2[frame][np.all(players_pos_team2[frame] >= 0, axis=1)]
-	
-	return (in_game_team1, in_game_team2, num_frames)
+
+	return (in_game_team1, in_game_team2)
 
 def plot_all_players_delaunay(team1: tuple, team2: tuple):
 	""" Plota todos os jogadores em dois grafos, representando seus respectivos times,
@@ -264,24 +314,34 @@ if __name__ == "__main__":
 	#pega as acoes do jogo
 	actions = get_actions(actions_array, data_array)
 
-	# gera vetores numpy para o frame especificado
-	teams = filtrar_dados(data_array, 1281)
+	teams_data = filtrar_dados(data_array)
 
-	# cria tuplas de vetores numpy do dado frame e seu grafo delaunay
-	data_graph1 = (teams[0], Delaunay(teams[0]))
-	data_graph2 = (teams[1], Delaunay(teams[1]))
+	table = data_manipulation(teams_data, actions)
 
-	# constroi o grafo por triangulação de Delaunay e retorna os "final_points" de cada time
-	final_points, g1, g2 = constroi_grafo_delaunay(data_graph1, data_graph2, 0.5)
+	frames = table.iloc[:,0].values
 
-	# plota todos os jogares em dois grafos de cada time
-	plot_all_players_delaunay(data_graph1, data_graph2)
+	for i in range(len(frames)):
+		frame_analise = frames[i]
+		print(frame_analise)
+		# gera vetores numpy para o frame especificado
+		teams = get_frame_position(teams_data, frame_analise)
 
-	# plota os final_points
-	plot_final_points(final_points)
+		# cria tuplas de vetores numpy do dado frame e seu grafo delaunay
+		data_graph1 = (teams[0], Delaunay(teams[0]))
+		data_graph2 = (teams[1], Delaunay(teams[1]))
 
-	# gera os dados do grafo
-	dados_team1, dados_team2 = gera_dados(g1, g2)
+		# constroi o grafo por triangulação de Delaunay e retorna os "final_points" de cada time
+		final_points, g1, g2 = constroi_grafo_delaunay(data_graph1, data_graph2, 0.5)
 
-	print(dados_team1)
-	print(dados_team2)
+		# plota todos os jogares em dois grafos de cada time
+	#	plot_all_players_delaunay(data_graph1, data_graph2)
+
+		# plota os final_points
+	#	plot_final_points(final_points)
+
+		# gera os dados do grafo
+		dados_team1, dados_team2 = gera_dados(g1, g2)
+
+		print(dados_team1)
+		print(dados_team2)
+		print()

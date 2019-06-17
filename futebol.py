@@ -4,6 +4,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 import pandas as pd
+from sklearn.metrics import confusion_matrix
 
 def get_actions(actions_array, position_array):
     #rotulos de acoes
@@ -357,8 +358,127 @@ def action_filter(table, teams_data, team=None, region=None, action=None, distan
         pagerank_team2.append(pagerank_t2)
         evcent_team1.append(evcent_t1)
         evcent_team2.append(evcent_t2)
-    
+        
     return (graus_team1, ecc_team1, cent_team1, pagerank_team1, evcent_team1),(graus_team2, ecc_team2, cent_team2, pagerank_team2, evcent_team2)
+
+    
+#     return (graus_team1, ecc_team1, cent_team1),(graus_team2, ecc_team2, cent_team2)
+
+
+def contatenate_properties(properties, axis=1):
+    array_prop = np.array(properties[0])
+    for prop in properties[1:]:
+        array_prop = np.concatenate((array_prop, np.array(prop)), axis=axis)
+    return array_prop
+
+
+def get_prop_both_teams(table, teams_data, region=None, action=None, distance=0):
+    team = 'team1'
+    properties_team1 = np.array(action_filter(table, teams_data, team=team, region=region, distance=distance)[0])
+    team = 'team2'
+    properties_team2 = np.array(action_filter(table, teams_data, team=team, region=region, distance=distance)[1])
+    try:
+        return np.concatenate((properties_team1, properties_team2), axis=1)
+    except:
+        if len(properties_team1.shape) == 3:
+            return properties_team1
+        elif len(properties_team2.shape) == 3:
+            return properties_team2
+        else:
+            return None
+        
+def get_prop_all_games(files_ant, files_2d, region=None, action=None, distance=0):
+    properties = []
+    for file_ant, file_2d in zip(files_ant, files_2d):
+        # carrega dados do arquivo
+        data_array = np.loadtxt(file_2d).astype('int')
+        
+        teams_data = filtrar_dados(data_array)
+
+        #carrega acoes
+        labels = ['frame', 'player', 'x', 'y', 'actions', 'status']
+        actions_array = pd.DataFrame(np.loadtxt(file_ant).astype('int'), columns=labels)
+
+        #pega as acoes do jogo
+        actions = get_actions(actions_array, data_array)
+
+        teams_data = filtrar_dados(data_array)
+
+        table = data_manipulation(teams_data, actions)
+
+        actions_labels = ['Domínio','Passe','Drible','Finalização-chute','Finalização-cabeca','Desarme (inf)','Desarme (sup)','Defesa Goleiro','Saida do Goleiro','Tiro-de-meta','Lateral','Escanteio','Impedimento','Falta','Gol', 'Condução']
+        mapping = {key: value for (key, value) in enumerate(actions_labels)}
+        table = table.replace({'actions': mapping})
+        
+        properties.append(get_prop_both_teams(table, teams_data, region=region, action=action, distance=distance))
+    
+    return contatenate_properties(properties)
+
+def evaluate_many_properties(files_ant, files_2d, regions):
+    properties = []
+    for value in regions:
+        properties.append(contatenate_properties(get_prop_all_games(files_ant, files_2d, region=value)))
+    return properties
+
+def generate_labels(properties):
+    labels = []
+    for i in range(len(properties)):
+        labels.append(np.full((len(properties[i])), i))
+    return labels
+
+def plot_confusion_matrix(y_true, y_pred, classes,
+                          normalize=False,
+                          title=None,
+                          cmap=plt.cm.Blues):
+    """
+    This function prints and plots the confusion matrix.
+    Normalization can be applied by setting `normalize=True`.
+    """
+    if not title:
+        if normalize:
+            title = 'Normalized confusion matrix'
+        else:
+            title = 'Confusion matrix, without normalization'
+
+    # Compute confusion matrix
+    cm = confusion_matrix(y_true, y_pred)
+    # Only use the labels that appear in the data
+    classes = classes[unique_labels(y_true, y_pred).astype(int)]
+    if normalize:
+        cm = cm.astype('float') / cm.sum(axis=1)[:, np.newaxis]
+        print("Normalized confusion matrix")
+    else:
+        print('Confusion matrix, without normalization')
+
+    print(cm)
+
+    fig, ax = plt.subplots()
+    im = ax.imshow(cm, interpolation='nearest', cmap=cmap)
+    ax.figure.colorbar(im, ax=ax)
+    # We want to show all ticks...
+    ax.set(xticks=np.arange(cm.shape[1]),
+           yticks=np.arange(cm.shape[0]),
+           # ... and label them with the respective list entries
+           xticklabels=classes, yticklabels=classes,
+           title=title,
+           ylabel='True label',
+           xlabel='Predicted label')
+
+    # Rotate the tick labels and set their alignment.
+    plt.setp(ax.get_xticklabels(), rotation=45, ha="right",
+             rotation_mode="anchor")
+
+    # Loop over data dimensions and create text annotations.
+    fmt = '.2f' if normalize else 'd'
+    thresh = cm.max() / 2.
+    for i in range(cm.shape[0]):
+        for j in range(cm.shape[1]):
+            ax.text(j, i, format(cm[i, j], fmt),
+                    ha="center", va="center",
+                    color="white" if cm[i, j] > thresh else "black")
+    fig.tight_layout()
+    return ax
+
 
 if __name__ == "__main__":
     # carrega dados do arquivo

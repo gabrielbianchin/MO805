@@ -289,21 +289,32 @@ def gera_dados(g1, g2):
 
     #centralidade de g1
     cent_t1 = g1.evcent()
+    
+    #pagerank de g2
+    pagerank_t1 = g1.pagerank()
+    
+    evcent_t1 = g1.evcent()
+    
 
     g2.simplify()
 
-    #graus do g1
+    #graus do g2
     graus_t2 = g2.degree()
 
-    #excentricidade de g1
+    #excentricidade de g2
     ecc_t2 = g2.eccentricity()
 
-    #centralidade de g1
+    #centralidade de g2
     cent_t2 = g2.evcent()
+    
+    #pagerank de g2
+    pagerank_t2 = g2.pagerank()
+    
+    evcent_t2 = g2.evcent()
 
-    return (graus_t1, ecc_t1, cent_t1), (graus_t2, ecc_t2, cent_t2)
+    return (graus_t1, ecc_t1, cent_t1, pagerank_t1, evcent_t1), (graus_t2, ecc_t2, cent_t2, pagerank_t2, evcent_t2)
 
-def action_filter(table, team=None, region=None, action=None, distance=0.5):
+def action_filter(table, teams_data, team=None, region=None, action=None, distance=0.5):
     if team == None:
         team = table['team']
 
@@ -314,30 +325,40 @@ def action_filter(table, team=None, region=None, action=None, distance=0.5):
         action = table['actions']
 
     selection_table = table[np.logical_and.reduce((table['team'] == team, table['region'] == region, table['actions'] == action))]
-
+    
+    graus_team1 = []
+    graus_team2 = []
+    
     ecc_team1 = []
     ecc_team2 = []
 
     cent_team1 = []
     cent_team2 = []
 
-    graus_team1 = []
-    graus_team2 = []
+    pagerank_team1 = []
+    pagerank_team2 = []
+    
+    evcent_team1 = []
+    evcent_team2 = []
 
     for frame in selection_table.frame:
         teams = get_frame_position(teams_data, frame)
         data_graph1 = (teams[0], Delaunay(teams[0]))
         data_graph2 = (teams[1], Delaunay(teams[1]))
         final_points, g1, g2 = constroi_grafo_delaunay(data_graph1, data_graph2, distance)
-        (graus_t1, ecc_t1, cent_t1), (graus_t2, ecc_t2, cent_t2) = gera_dados(g1, g2)
+        (graus_t1, ecc_t1, cent_t1, pagerank_t1, evcent_t1), (graus_t2, ecc_t2, cent_t2, pagerank_t2, evcent_t2) = gera_dados(g1, g2)
+        graus_team1.append(graus_t1)
+        graus_team2.append(graus_t2)
         ecc_team1.append(ecc_t1)
         ecc_team2.append(ecc_t2)
         cent_team1.append(cent_t1)
         cent_team2.append(cent_t2)
-        graus_team1.append(graus_t1)
-        graus_team2.append(graus_t2)
+        pagerank_team1.append(pagerank_t1)
+        pagerank_team2.append(pagerank_t2)
+        evcent_team1.append(evcent_t1)
+        evcent_team2.append(evcent_t2)
     
-    return ecc_team1, ecc_team2, cent_team1, cent_team2, graus_team1, graus_team2
+    return (graus_team1, ecc_team1, cent_team1, pagerank_team1, evcent_team1),(graus_team2, ecc_team2, cent_team2, pagerank_team2, evcent_team2)
 
 if __name__ == "__main__":
     # carrega dados do arquivo

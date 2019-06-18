@@ -441,12 +441,12 @@ def evaluate_list(files_ant, files_2d, region=[], action=[], distance=0):
     if len(region)>1:
         evaluated_list = region
         for value in evaluated_list:
-            properties.append(contatenate_properties(get_prop_all_games(files_ant, files_2d, region=value)))
+            properties.append(contatenate_properties(get_prop_all_games(files_ant, files_2d, region=value, distance=distance)))
         return properties
     elif len(action)>1:
         evaluated_list = action
         for value in evaluated_list:
-            properties.append(contatenate_properties(get_prop_all_games(files_ant, files_2d, action=value)))
+            properties.append(contatenate_properties(get_prop_all_games(files_ant, files_2d, action=value, distance=distance)))
         return properties
     else:
         print("Error: Need specify one list as parameter")

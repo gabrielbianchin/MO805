@@ -11,12 +11,12 @@ for file in files_ant:
     files_2d.append(data_folder + base_name + 'suav.2d')
 
 distance=0
-classes_names = ['Domínio','Passe','Drible','Finalização-chute','Finalização-cabeca','Desarme (inf)','Desarme (sup)','Defesa Goleiro','Saida do Goleiro','Tiro-de-meta','Lateral','Escanteio','Impedimento','Falta','Gol', 'Condução']
-#classes_names = np.array(['defense field', 'neutral', 'danger'])
+#classes_names = ['Domínio','Passe','Drible','Finalização-chute','Finalização-cabeca','Desarme (inf)','Desarme (sup)','Defesa Goleiro','Saida do Goleiro','Tiro-de-meta','Lateral','Escanteio','Impedimento','Falta','Gol', 'Condução']
+classes_names = np.array(['defense field', 'neutral', 'danger'])
 # classes_names = np.array(['Finalização-chute','Defesa Goleiro','Escanteio'])
 
 
-properties = evaluate_list(files_ant, files_2d, action=classes_names, distance=1)
+properties = evaluate_list(files_ant, files_2d, region=classes_names, distance=0.75)
 labels_properties = generate_labels(properties)
 
 X = contatenate_properties(properties, axis=0)
@@ -30,7 +30,10 @@ X_balanced, y_balanced = balance_data(X, y)
 cross_acc, properties_relevance, acc, recall, matrix, recall = evaluate_prop(clf, X_balanced, y_balanced, classes_names)
 
 print(cross_acc)
+print()
 print(properties_relevance)
+print()
 print(acc)
+print()
 print(recall)
 plt.show()

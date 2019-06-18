@@ -460,7 +460,7 @@ def evaluate_prop(clf, X, y, classes_names):
     y_pred = clf.predict(X_test)
     acc = metrics.accuracy_score(y_test, y_pred)
     recall = metrics.recall_score(y_test, y_pred, average=None)
-    matrix = plot_confusion_matrix(y_test, y_pred, classes=np.array(classes_names))
+    matrix = plot_confusion_matrix(y_test, y_pred, classes=np.array(classes_names), normalize=True)
     return cross_acc, properties_relevance, acc, recall, matrix, recall
         
 def balance_data(X, y):

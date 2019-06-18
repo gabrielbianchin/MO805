@@ -4,6 +4,13 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 import pandas as pd
+from sklearn.metrics import confusion_matrix
+from sklearn.utils.multiclass import unique_labels
+from sklearn.model_selection import train_test_split
+from sklearn.model_selection import cross_val_score
+from sklearn import metrics
+
+
 
 def get_actions(actions_array, position_array):
     #rotulos de acoes
@@ -249,6 +256,7 @@ def plot_all_players_delaunay(team1: tuple, team2: tuple):
     plt.scatter(team1[0][:, 0], team1[0][:, 1], c='b')
     plt.scatter(team2[0][:, 0], team2[0][:, 1], c='r')
     plt.show()
+    
 
 def plot_final_points(final_points: tuple):
     for i in range(len(final_points[1])):
@@ -267,6 +275,7 @@ def plot_final_points(final_points: tuple):
     plt.xlim(0,120)
     plt.ylim(0,80)
     plt.show()
+    
 
 def gera_dados(g1, g2):
 
@@ -309,7 +318,8 @@ def gera_dados(g1, g2):
 
     return (graus_t1, ecc_t1, cent_t1, pagerank_t1, evcent_t1), (graus_t2, ecc_t2, cent_t2, pagerank_t2, evcent_t2)
 
-def action_filter(table, teams_data, team=None, region=None, action=None, distance=0.5):
+
+def filter_table(table, team=None, region=None, action=None, distance=0):
     if team == None:
         team = table['team']
 
@@ -321,6 +331,13 @@ def action_filter(table, teams_data, team=None, region=None, action=None, distan
 
     selection_table = table[np.logical_and.reduce((table['team'] == team, table['region'] == region, table['actions'] == action))]
     
+    return selection_table
+    
+
+def bulk_properties(table, teams_data, team=None, region=None, action=None, distance=0):
+
+    selection_table = filter_table(table, team=team, region=region, action=action, distance=distance)
+        
     graus_team1 = []
     graus_team2 = []
     
@@ -335,12 +352,18 @@ def action_filter(table, teams_data, team=None, region=None, action=None, distan
     
     evcent_team1 = []
     evcent_team2 = []
+    
+    layout_team1 = []
+    layout_team2 = []
 
     for frame in selection_table.frame:
         teams = get_frame_position(teams_data, frame)
         data_graph1 = (teams[0], Delaunay(teams[0]))
         data_graph2 = (teams[1], Delaunay(teams[1]))
-        final_points, g1, g2 = constroi_grafo_delaunay(data_graph1, data_graph2, distance)
+        try:
+            final_points, g1, g2 = constroi_grafo_delaunay(data_graph1, data_graph2, distance)
+        except:
+            continue
         (graus_t1, ecc_t1, cent_t1, pagerank_t1, evcent_t1), (graus_t2, ecc_t2, cent_t2, pagerank_t2, evcent_t2) = gera_dados(g1, g2)
         graus_team1.append(graus_t1)
         graus_team2.append(graus_t2)
@@ -352,8 +375,174 @@ def action_filter(table, teams_data, team=None, region=None, action=None, distan
         pagerank_team2.append(pagerank_t2)
         evcent_team1.append(evcent_t1)
         evcent_team2.append(evcent_t2)
-    
+        
     return (graus_team1, ecc_team1, cent_team1, pagerank_team1, evcent_team1),(graus_team2, ecc_team2, cent_team2, pagerank_team2, evcent_team2)
+
+    
+#     return (graus_team1, ecc_team1, cent_team1),(graus_team2, ecc_team2, cent_team2)
+
+
+def contatenate_properties(properties, axis=1):
+    array_prop = np.array(properties[0])
+    for prop in properties[1:]:
+        try:
+            array_prop = np.concatenate((array_prop, np.array(prop)), axis=axis)
+        except:
+            pass
+    return array_prop
+
+
+def get_prop_both_teams(table, teams_data, region=None, action=None, distance=0):
+    team = 'team1'
+    properties_team1 = np.array(bulk_properties(table, teams_data, team=team, region=region, action=action, distance=distance)[0])
+    team = 'team2'
+    properties_team2 = np.array(bulk_properties(table, teams_data, team=team, region=region, action=action, distance=distance)[1])
+    try:
+        return np.concatenate((properties_team1, properties_team2), axis=1)
+    except:
+        if len(properties_team1.shape) == 3:
+            return properties_team1
+        elif len(properties_team2.shape) == 3:
+            return properties_team2
+        else:
+            return None
+        
+def get_prop_all_games(files_ant, files_2d, region=None, action=None, distance=0):
+    properties = []
+    for file_ant, file_2d in zip(files_ant, files_2d):
+        # carrega dados do arquivo
+        data_array = np.loadtxt(file_2d).astype('int')
+        
+        teams_data = filtrar_dados(data_array)
+
+        #carrega acoes
+        labels = ['frame', 'player', 'x', 'y', 'actions', 'status']
+        actions_array = pd.DataFrame(np.loadtxt(file_ant).astype('int'), columns=labels)
+
+        #pega as acoes do jogo
+        actions = get_actions(actions_array, data_array)
+
+        teams_data = filtrar_dados(data_array)
+
+        table = data_manipulation(teams_data, actions)
+
+        actions_labels = ['Domínio','Passe','Drible','Finalização-chute','Finalização-cabeca','Desarme (inf)','Desarme (sup)','Defesa Goleiro','Saida do Goleiro','Tiro-de-meta','Lateral','Escanteio','Impedimento','Falta','Gol', 'Condução']
+        mapping = {key: value for (key, value) in enumerate(actions_labels)}
+        table = table.replace({'actions': mapping})
+        
+        properties.append(get_prop_both_teams(table, teams_data, region=region, action=action, distance=distance))
+    
+    return contatenate_properties(properties)
+
+def evaluate_list(files_ant, files_2d, region=[], action=[], distance=0):
+    properties = []
+    if len(region)>1:
+        evaluated_list = region
+        for value in evaluated_list:
+            properties.append(contatenate_properties(get_prop_all_games(files_ant, files_2d, region=value, distance=distance)))
+        return properties
+    elif len(action)>1:
+        evaluated_list = action
+        for value in evaluated_list:
+            properties.append(contatenate_properties(get_prop_all_games(files_ant, files_2d, action=value, distance=distance)))
+        return properties
+    else:
+        print("Error: Need specify one list as parameter")
+        
+def evaluate_prop(clf, X, y, classes_names):
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=0)
+    cross_acc = cross_val_score(clf, X_train, y_train, cv=3)
+    clf.fit(X_train, y_train)
+    properties_idx = np.arange(0,X.shape[1]+1,11)
+    properties_relevance = []
+    for i in range(len(properties_idx)-1):
+        properties_relevance.append(np.mean(clf.feature_importances_[properties_idx[i]:properties_idx[i+1]])*11)
+    y_pred = clf.predict(X_test)
+    acc = metrics.accuracy_score(y_test, y_pred)
+    recall = metrics.recall_score(y_test, y_pred, average=None)
+    matrix = plot_confusion_matrix(y_test, y_pred, classes=np.array(classes_names))
+    return cross_acc, properties_relevance, acc, recall, matrix, recall
+        
+def balance_data(X, y):
+    labels, counts = np.unique(y, return_counts=True)
+    min_elements = min(counts)
+
+    X_balanced = np.zeros(shape=(min_elements*len(labels), X.shape[1]))
+    y_balanced = np.zeros(shape=(min_elements*len(labels)))
+
+    for i,label in enumerate(labels):
+        idx = y==label
+
+        X_temp = X[idx]
+        np.random.seed(0)
+        np.random.shuffle(X_temp)
+
+        X_balanced[i*min_elements:(i+1)*min_elements] = X_temp[:min_elements]
+        y_balanced[i*min_elements:(i+1)*min_elements] = [i]*min_elements
+        
+    return X_balanced, y_balanced
+
+
+
+def generate_labels(properties):
+    labels = []
+    for i in range(len(properties)):
+        labels.append(np.full((len(properties[i])), i))
+    return labels
+
+def plot_confusion_matrix(y_true, y_pred, classes,
+                          normalize=False,
+                          title=None,
+                          cmap=plt.cm.Blues):
+    """
+    This function prints and plots the confusion matrix.
+    Normalization can be applied by setting `normalize=True`.
+    """
+    if not title:
+        if normalize:
+            title = 'Normalized confusion matrix'
+        else:
+            title = 'Confusion matrix, without normalization'
+
+    # Compute confusion matrix
+    cm = confusion_matrix(y_true, y_pred)
+    # Only use the labels that appear in the data
+    classes = classes[unique_labels(y_true, y_pred).astype(int)]
+    if normalize:
+        cm = cm.astype('float') / cm.sum(axis=1)[:, np.newaxis]
+        print("Normalized confusion matrix")
+    else:
+        print('Confusion matrix, without normalization')
+
+    print(cm)
+
+    fig, ax = plt.subplots()
+    im = ax.imshow(cm, interpolation='nearest', cmap=cmap)
+    ax.figure.colorbar(im, ax=ax)
+    # We want to show all ticks...
+    ax.set(xticks=np.arange(cm.shape[1]),
+           yticks=np.arange(cm.shape[0]),
+           # ... and label them with the respective list entries
+           xticklabels=classes, yticklabels=classes,
+           title=title,
+           ylabel='True label',
+           xlabel='Predicted label')
+
+    # Rotate the tick labels and set their alignment.
+    plt.setp(ax.get_xticklabels(), rotation=45, ha="right",
+             rotation_mode="anchor")
+
+    # Loop over data dimensions and create text annotations.
+    fmt = '.2f' if normalize else 'd'
+    thresh = cm.max() / 2.
+    for i in range(cm.shape[0]):
+        for j in range(cm.shape[1]):
+            ax.text(j, i, format(cm[i, j], fmt),
+                    ha="center", va="center",
+                    color="white" if cm[i, j] > thresh else "black")
+    fig.tight_layout()
+    return ax
+
 
 if __name__ == "__main__":
     # carrega dados do arquivo
@@ -374,7 +563,7 @@ if __name__ == "__main__":
     mapping = {key: value for (key, value) in enumerate(actions_labels)}
     table = table.replace({'actions': mapping})
 
-    ecc_team1, ecc_team2, cent_team1, cent_team2, graus_team1, graus_team2 = action_filter(table, team='team1', region='danger', distance=0.8)
+    ecc_team1, ecc_team2, cent_team1, cent_team2, graus_team1, graus_team2 = bulk_properties(table, team='team1', region='danger', distance=0.8)
 
     print(np.mean(graus_team1))
 print(np.mean(graus_team2))

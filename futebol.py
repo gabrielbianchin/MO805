@@ -365,7 +365,10 @@ def bulk_properties(table, teams_data, team=None, region=None, action=None, dist
         teams = get_frame_position(teams_data, frame)
         data_graph1 = (teams[0], Delaunay(teams[0]))
         data_graph2 = (teams[1], Delaunay(teams[1]))
-        final_points, g1, g2 = constroi_grafo_delaunay(data_graph1, data_graph2, distance)
+        try:
+            final_points, g1, g2 = constroi_grafo_delaunay(data_graph1, data_graph2, distance)
+        except:
+            continue
         (graus_t1, ecc_t1, cent_t1, pagerank_t1, evcent_t1), (graus_t2, ecc_t2, cent_t2, pagerank_t2, evcent_t2) = gera_dados(g1, g2)
         graus_team1.append(graus_t1)
         graus_team2.append(graus_t2)

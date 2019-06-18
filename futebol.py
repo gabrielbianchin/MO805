@@ -5,6 +5,12 @@ import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 import pandas as pd
 from sklearn.metrics import confusion_matrix
+from sklearn.utils.multiclass import unique_labels
+from sklearn.model_selection import train_test_split
+from sklearn.model_selection import cross_val_score
+from sklearn import metrics
+
+
 
 def get_actions(actions_array, position_array):
     #rotulos de acoes
@@ -255,6 +261,7 @@ def plot_all_players_delaunay(team1: tuple, team2: tuple):
     plt.scatter(team1[0][:, 0], team1[0][:, 1], c='b')
     plt.scatter(team2[0][:, 0], team2[0][:, 1], c='r')
     plt.show()
+    
 
 def plot_final_points(final_points: tuple):
     for i in range(len(final_points[1])):
@@ -273,6 +280,7 @@ def plot_final_points(final_points: tuple):
     plt.xlim(0,120)
     plt.ylim(0,80)
     plt.show()
+    
 
 def gera_dados(g1, g2):
 
@@ -315,7 +323,8 @@ def gera_dados(g1, g2):
 
     return (graus_t1, ecc_t1, cent_t1, pagerank_t1, evcent_t1), (graus_t2, ecc_t2, cent_t2, pagerank_t2, evcent_t2)
 
-def action_filter(table, teams_data, team=None, region=None, action=None, distance=0.5):
+
+def filter_table(table, team=None, region=None, action=None, distance=0):
     if team == None:
         team = table['team']
 
@@ -327,6 +336,13 @@ def action_filter(table, teams_data, team=None, region=None, action=None, distan
 
     selection_table = table[np.logical_and.reduce((table['team'] == team, table['region'] == region, table['actions'] == action))]
     
+    return selection_table
+    
+
+def bulk_properties(table, teams_data, team=None, region=None, action=None, distance=0):
+
+    selection_table = filter_table(table, team=team, region=region, action=action, distance=distance)
+        
     graus_team1 = []
     graus_team2 = []
     
@@ -341,6 +357,9 @@ def action_filter(table, teams_data, team=None, region=None, action=None, distan
     
     evcent_team1 = []
     evcent_team2 = []
+    
+    layout_team1 = []
+    layout_team2 = []
 
     for frame in selection_table.frame:
         teams = get_frame_position(teams_data, frame)
@@ -368,15 +387,18 @@ def action_filter(table, teams_data, team=None, region=None, action=None, distan
 def contatenate_properties(properties, axis=1):
     array_prop = np.array(properties[0])
     for prop in properties[1:]:
-        array_prop = np.concatenate((array_prop, np.array(prop)), axis=axis)
+        try:
+            array_prop = np.concatenate((array_prop, np.array(prop)), axis=axis)
+        except:
+            pass
     return array_prop
 
 
 def get_prop_both_teams(table, teams_data, region=None, action=None, distance=0):
     team = 'team1'
-    properties_team1 = np.array(action_filter(table, teams_data, team=team, region=region, distance=distance)[0])
+    properties_team1 = np.array(bulk_properties(table, teams_data, team=team, region=region, action=action, distance=distance)[0])
     team = 'team2'
-    properties_team2 = np.array(action_filter(table, teams_data, team=team, region=region, distance=distance)[1])
+    properties_team2 = np.array(bulk_properties(table, teams_data, team=team, region=region, action=action, distance=distance)[1])
     try:
         return np.concatenate((properties_team1, properties_team2), axis=1)
     except:
@@ -414,11 +436,55 @@ def get_prop_all_games(files_ant, files_2d, region=None, action=None, distance=0
     
     return contatenate_properties(properties)
 
-def evaluate_many_properties(files_ant, files_2d, regions):
+def evaluate_list(files_ant, files_2d, region=[], action=[], distance=0):
     properties = []
-    for value in regions:
-        properties.append(contatenate_properties(get_prop_all_games(files_ant, files_2d, region=value)))
-    return properties
+    if len(region)>1:
+        evaluated_list = region
+        for value in evaluated_list:
+            properties.append(contatenate_properties(get_prop_all_games(files_ant, files_2d, region=value)))
+        return properties
+    elif len(action)>1:
+        evaluated_list = action
+        for value in evaluated_list:
+            properties.append(contatenate_properties(get_prop_all_games(files_ant, files_2d, action=value)))
+        return properties
+    else:
+        print("Error: Need specify one list as parameter")
+        
+def evaluate_prop(clf, X, y, classes_names):
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=0)
+    cross_acc = cross_val_score(clf, X_train, y_train, cv=3)
+    clf.fit(X_train, y_train)
+    properties_idx = np.arange(0,X.shape[1]+1,11)
+    properties_relevance = []
+    for i in range(len(properties_idx)-1):
+        properties_relevance.append(np.mean(clf.feature_importances_[properties_idx[i]:properties_idx[i+1]])*11)
+    y_pred = clf.predict(X_test)
+    acc = metrics.accuracy_score(y_test, y_pred)
+    recall = metrics.recall_score(y_test, y_pred, average=None)
+    matrix = plot_confusion_matrix(y_test, y_pred, classes=np.array(classes_names))
+    return cross_acc, properties_relevance, acc, recall, matrix, recall
+        
+def balance_data(X, y):
+    labels, counts = np.unique(y, return_counts=True)
+    min_elements = min(counts)
+
+    X_balanced = np.zeros(shape=(min_elements*len(labels), X.shape[1]))
+    y_balanced = np.zeros(shape=(min_elements*len(labels)))
+
+    for i,label in enumerate(labels):
+        idx = y==label
+
+        X_temp = X[idx]
+        np.random.seed(0)
+        np.random.shuffle(X_temp)
+
+        X_balanced[i*min_elements:(i+1)*min_elements] = X_temp[:min_elements]
+        y_balanced[i*min_elements:(i+1)*min_elements] = [i]*min_elements
+        
+    return X_balanced, y_balanced
+
+
 
 def generate_labels(properties):
     labels = []
@@ -499,7 +565,7 @@ if __name__ == "__main__":
     mapping = {key: value for (key, value) in enumerate(actions_labels)}
     table = table.replace({'actions': mapping})
 
-    ecc_team1, ecc_team2, cent_team1, cent_team2, graus_team1, graus_team2 = action_filter(table, team='team1', region='danger', distance=0.8)
+    ecc_team1, ecc_team2, cent_team1, cent_team2, graus_team1, graus_team2 = bulk_properties(table, team='team1', region='danger', distance=0.8)
 
     print(np.mean(graus_team1))
     print(np.mean(graus_team2))

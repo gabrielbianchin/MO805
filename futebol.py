@@ -490,6 +490,7 @@ def generate_labels(properties):
         labels.append(np.full((len(properties[i])), i))
     return labels
 
+
 def plot_confusion_matrix(y_true, y_pred, classes,
                           normalize=False,
                           title=None,
@@ -566,4 +567,4 @@ if __name__ == "__main__":
     ecc_team1, ecc_team2, cent_team1, cent_team2, graus_team1, graus_team2 = bulk_properties(table, team='team1', region='danger', distance=0.8)
 
     print(np.mean(graus_team1))
-print(np.mean(graus_team2))
+    print(np.mean(graus_team2))
